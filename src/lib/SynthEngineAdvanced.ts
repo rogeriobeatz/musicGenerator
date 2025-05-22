@@ -1,6 +1,5 @@
 // SynthEngineAdvanced.ts
 // Motor musical avançado com geração de melodias criativas e dinâmicas
-
 import * as Tone from 'tone';
 
 // Definição das escalas musicais
@@ -125,6 +124,15 @@ class SynthEngineAdvanced {
       filter: 2000, // Frequência do filtro (100-10000)
     };
     
+    // IMPORTANTE: Inicializa displayInfo ANTES de chamar qualquer método que possa usá-lo
+    this.displayInfo = {
+      currentSeed: this.seed,
+      currentScale: this.getScaleName(this.params.scale),
+      currentRoot: NOTE_NAMES[this.params.root],
+      currentBPM: this.params.tempo,
+      evolutionPhase: 'Início'
+    };
+    
     // Sequências e padrões
     this.currentPattern = [];
     this.currentChordProgression = [];
@@ -133,7 +141,6 @@ class SynthEngineAdvanced {
     
     // Arcos melódicos e evolução
     this.evolutionStage = 0;
-    this.tensionCurve = this.generateTensionCurve();
     
     // Contadores
     this.step = 0;
@@ -141,16 +148,10 @@ class SynthEngineAdvanced {
     this.section = 0;
     this.phrase = 0;
     
-    // Informações de display
-    this.displayInfo = {
-      currentSeed: this.seed,
-      currentScale: this.getScaleName(this.params.scale),
-      currentRoot: NOTE_NAMES[this.params.root],
-      currentBPM: this.params.tempo,
-      evolutionPhase: 'Início'
-    };
+    // IMPORTANTE: Agora é seguro chamar este método, pois displayInfo já está inicializado
+    this.tensionCurve = this.generateTensionCurve();
   }
-  
+
   // Gera uma curva de tensão para o arco melódico
   generateTensionCurve(): number[] {
     const curveLength = 32; // 8 compassos de 4 tempos
@@ -187,24 +188,29 @@ class SynthEngineAdvanced {
       // Interpola linearmente
       const t = (i - p1.x) / (p2.x - p1.x);
       const value = p1.y + t * (p2.y - p1.y);
-      
       curve.push(value);
     }
     
     return curve;
   }
-  
+
   // Gerador de números pseudo-aleatórios baseado em seed
   seededRandom(): number {
     const x = Math.sin(this.seed++) * 10000;
     return x - Math.floor(x);
   }
-  
+
   // Reseta o gerador para a seed atual
   resetRandomSeed(): void {
-    this.seed = this.displayInfo.currentSeed;
+    // IMPORTANTE: Verificação de segurança adicionada
+    if (this.displayInfo && this.displayInfo.currentSeed !== undefined) {
+      this.seed = this.displayInfo.currentSeed;
+    } else {
+      // Fallback seguro
+      this.seed = Math.floor(Math.random() * 1000000);
+    }
   }
-  
+
   // Muda a seed e regenera todos os padrões
   changeSeed(newSeed?: number): void {
     this.displayInfo.currentSeed = newSeed || Math.floor(Math.random() * 1000000);
@@ -214,11 +220,10 @@ class SynthEngineAdvanced {
     this.generatePatterns();
     this.displayInfo.evolutionPhase = 'Início';
   }
-  
+
   // Randomiza todos os knobs
   randomizeAllKnobs(): void {
     this.resetRandomSeed();
-    
     this.params.scale = Math.floor(this.seededRandom() * 7);
     this.params.root = Math.floor(this.seededRandom() * 12);
     this.params.octave = Math.floor(this.seededRandom() * 3) + 3; // 3-5
@@ -248,42 +253,28 @@ class SynthEngineAdvanced {
       this.filter.frequency.value = this.params.filter;
     }
   }
-  
+
   // Obtém o nome da escala a partir do índice
   getScaleName(index: number): string {
     const scaleNames = ['Maior', 'Menor', 'Pentatônica', 'Blues', 'Dórica', 'Frígia', 'Lídia'];
     return scaleNames[Math.min(index, scaleNames.length - 1)];
   }
-  
+
   // Inicializa os instrumentos e efeitos
   async initialize() {
     if (this.isInitialized) return;
     
     // Cria o sintetizador de melodia
     this.melodySynth = new Tone.PolySynth(Tone.Synth, {
-      oscillator: {
-        type: 'triangle8'
-      },
-      envelope: {
-        attack: 0.02,
-        decay: 0.1,
-        sustain: 0.3,
-        release: 1
-      }
+      oscillator: { type: 'triangle8' },
+      envelope: { attack: 0.02, decay: 0.1, sustain: 0.3, release: 1 }
     }).toDestination();
     this.melodySynth.volume.value = -10;
     
     // Cria o sintetizador de acordes
     this.chordSynth = new Tone.PolySynth(Tone.Synth, {
-      oscillator: {
-        type: 'sine'
-      },
-      envelope: {
-        attack: 0.05,
-        decay: 0.2,
-        sustain: 0.4,
-        release: 1.5
-      }
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.05, decay: 0.2, sustain: 0.4, release: 1.5 }
     }).toDestination();
     this.chordSynth.volume.value = -15;
     
@@ -294,19 +285,12 @@ class SynthEngineAdvanced {
     }).toDestination();
     this.bassSynth.volume.value = -8;
     
-    // Cria o sintetizador de pad (para texturas)
+    // Cria o sintetizador de pad
     this.padSynth = new Tone.PolySynth(Tone.Synth, {
-      oscillator: {
-        type: 'sine'
-      },
-      envelope: {
-        attack: 1.5,
-        decay: 0.5,
-        sustain: 0.8,
-        release: 3
-      }
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.5, decay: 0.5, sustain: 0.8, release: 3 }
     }).toDestination();
-    this.padSynth.volume.value = -20;
+    this.padSynth.volume.value = -18;
     
     // Efeitos
     this.reverb = new Tone.Reverb(3).toDestination();
@@ -339,7 +323,7 @@ class SynthEngineAdvanced {
     
     this.isInitialized = true;
   }
-  
+
   // Inicia a reprodução
   async start() {
     if (!this.isInitialized) {
@@ -353,7 +337,7 @@ class SynthEngineAdvanced {
     Tone.Transport.start();
     this.isPlaying = true;
   }
-  
+
   // Para a reprodução
   stop() {
     Tone.Transport.stop();
@@ -362,28 +346,18 @@ class SynthEngineAdvanced {
     this.bar = 0;
     this.section = 0;
     this.phrase = 0;
-    this.evolutionStage = 0;
-    this.displayInfo.evolutionPhase = 'Início';
   }
-  
+
   // Atualiza um parâmetro
   updateParam(param: string, value: number) {
     if (this.params[param as keyof typeof this.params] !== undefined) {
       this.params[param as keyof typeof this.params] = value;
       
-      // Atualiza o display se necessário
-      if (param === 'scale') {
-        this.displayInfo.currentScale = this.getScaleName(value);
-      } else if (param === 'root') {
-        this.displayInfo.currentRoot = NOTE_NAMES[Math.floor(value)];
-      } else if (param === 'tempo') {
-        this.displayInfo.currentBPM = value;
-      }
-      
       // Atualiza parâmetros em tempo real
       switch (param) {
         case 'tempo':
           Tone.Transport.bpm.value = value;
+          this.displayInfo.currentBPM = value;
           break;
         case 'reverb':
           this.reverb.wet.value = value;
@@ -395,24 +369,33 @@ class SynthEngineAdvanced {
           this.filter.frequency.value = value;
           break;
         case 'scale':
+          this.displayInfo.currentScale = this.getScaleName(value);
+          this.generatePatterns();
+          break;
         case 'root':
+          this.displayInfo.currentRoot = NOTE_NAMES[value];
+          this.generatePatterns();
+          break;
         case 'chordComplexity':
         case 'harmonicTension':
-          // Regenera padrões quando parâmetros harmônicos mudam
+        case 'bassIntensity':
+        case 'rhythmComplexity':
+          // Regenera padrões quando parâmetros musicais mudam
           this.generatePatterns();
           break;
       }
     }
   }
-  
+
   // Gera os padrões musicais baseados nos parâmetros atuais
   generatePatterns() {
-    this.resetRandomSeed();
-    
     // Obtém a escala atual
     const scaleType = Object.keys(SCALES)[Math.floor(this.params.scale)];
     const scale = SCALES[scaleType as keyof typeof SCALES] || SCALES.major;
     const root = Math.floor(this.params.root);
+    
+    // Reseta a seed para consistência
+    this.resetRandomSeed();
     
     // Gera progressão de acordes
     this.currentChordProgression = this.generateChordProgression(scale, root);
@@ -423,27 +406,24 @@ class SynthEngineAdvanced {
     // Gera padrão melódico principal
     this.currentPattern = this.generateMelodicPattern(scale, root);
     
-    // Gera padrão de hook (gancho melódico)
+    // Gera padrão de gancho (hook) memorável
     this.hookPattern = this.generateHookPattern(scale, root);
   }
-  
-  // Gera uma progressão de acordes baseada na escala e na seed
+
+  // Gera uma progressão de acordes baseada na escala e complexidade
   generateChordProgression(scale: number[], root: number) {
-    this.resetRandomSeed();
-    
-    // Seleciona um tipo de progressão baseado na complexidade
+    // Seleciona o tipo de progressão baseado na complexidade
     let progressionType: 'pop' | 'emotional' | 'epic';
-    const complexity = this.params.chordComplexity;
     
-    if (complexity < 0.33) {
+    if (this.params.chordComplexity < 0.33) {
       progressionType = 'pop';
-    } else if (complexity < 0.66) {
+    } else if (this.params.chordComplexity < 0.66) {
       progressionType = 'emotional';
     } else {
       progressionType = 'epic';
     }
     
-    // Seleciona uma progressão específica
+    // Seleciona uma progressão aleatória do tipo escolhido
     const progressions = VIRAL_PROGRESSIONS[progressionType];
     const progressionIndex = Math.floor(this.seededRandom() * progressions.length);
     const progression = progressions[progressionIndex];
@@ -462,17 +442,22 @@ class SynthEngineAdvanced {
         chordNotes.push(this.getNote(scale, root, degree + 6, this.params.octave));
       }
       
+      // Adiciona a nona se a tensão harmônica for muito alta
+      if (this.params.harmonicTension > 0.8) {
+        chordNotes.push(this.getNote(scale, root, degree + 8, this.params.octave + 1));
+      }
+      
       return chordNotes;
     });
   }
-  
+
   // Gera uma linha de baixo baseada na progressão de acordes
   generateBassline(scale: number[], root: number) {
     const bassline: string[][] = [];
     const progression = this.currentChordProgression || this.generateChordProgression(scale, root);
     
     // Para cada acorde na progressão
-    progression.forEach(chord => {
+    progression.forEach((chord, index) => {
       // Nota fundamental do acorde (uma oitava abaixo)
       const fundamental = chord[0].slice(0, -1) + (parseInt(chord[0].slice(-1)) - 1);
       
@@ -489,15 +474,16 @@ class SynthEngineAdvanced {
       
       if (this.params.bassIntensity > 0.6) {
         // Adiciona caminhada cromática ou diatônica
-        const nextFundamental = progression[(progression.indexOf(chord) + 1) % progression.length][0];
+        const nextIndex = (index + 1) % progression.length;
+        const nextFundamental = progression[nextIndex][0];
         const walkingNote = this.getWalkingBassNote(fundamental, nextFundamental);
         pattern.push(walkingNote);
       }
       
-      // Adiciona variação rítmica baseada na complexidade
-      if (this.params.rhythmComplexity > 0.7 && this.seededRandom() > 0.5) {
-        const extraNote = this.getNote(scale, root, Math.floor(this.seededRandom() * scale.length), this.params.octave - 1);
-        pattern.push(extraNote);
+      // Adiciona variação rítmica para intensidade alta
+      if (this.params.bassIntensity > 0.8 && this.params.rhythmComplexity > 0.5) {
+        const octaveNote = fundamental.slice(0, -1) + (parseInt(fundamental.slice(-1)) + 1);
+        pattern.push(octaveNote);
       }
       
       bassline.push(pattern);
@@ -505,53 +491,50 @@ class SynthEngineAdvanced {
     
     return bassline;
   }
-  
+
   // Gera um padrão melódico baseado na escala
   generateMelodicPattern(scale: number[], root: number) {
     const pattern: (string | null)[] = [];
+    const patternLength = 8 + Math.floor(this.params.rhythmComplexity * 8); // 8-16 notas
     
-    // Determina o comprimento do padrão baseado na complexidade
-    const baseLength = 8;
-    const complexityFactor = Math.floor(this.params.rhythmComplexity * 8);
-    const patternLength = baseLength + complexityFactor;
-    
-    // Seleciona um padrão rítmico base
-    let rhythmPattern: number[];
-    if (this.params.rhythmComplexity < 0.3) {
+    // Seleciona um padrão rítmico baseado na complexidade
+    let rhythmPattern;
+    if (this.params.rhythmComplexity < 0.33) {
       rhythmPattern = RHYTHM_PATTERNS.simple;
-    } else if (this.params.rhythmComplexity < 0.7) {
+    } else if (this.params.rhythmComplexity < 0.66) {
       rhythmPattern = RHYTHM_PATTERNS.medium;
     } else {
       rhythmPattern = RHYTHM_PATTERNS.complex;
     }
     
-    // Gera notas baseadas no padrão rítmico e na escala
+    // Gera notas baseadas no padrão rítmico e na curva de tensão
     for (let i = 0; i < patternLength; i++) {
+      // Usa o padrão rítmico para determinar notas vs. pausas
       const rhythmIndex = i % rhythmPattern.length;
       
-      // Se o padrão rítmico indica uma nota
-      if (rhythmPattern[rhythmIndex] === 1 || this.seededRandom() > 0.7) {
-        // Seleciona um grau da escala com preferência para notas fortes
-        let degree;
-        const r = this.seededRandom();
+      if (rhythmPattern[rhythmIndex] === 1) {
+        // Posição na curva de tensão
+        const tensionIndex = i % this.tensionCurve.length;
+        const tension = this.tensionCurve[tensionIndex];
         
-        if (r < 0.6) {
-          // Notas fortes da escala (tônica, terça, quinta)
-          const strongDegrees = [0, 2, 4];
-          degree = strongDegrees[Math.floor(this.seededRandom() * strongDegrees.length)];
-        } else {
-          // Outras notas da escala
+        // Usa a tensão para influenciar a escolha de notas
+        let degree;
+        if (tension < 0.3) {
+          // Baixa tensão: notas estáveis (tônica, terça, quinta)
+          degree = [0, 2, 4][Math.floor(this.seededRandom() * 3)];
+        } else if (tension < 0.6) {
+          // Média tensão: notas da escala
           degree = Math.floor(this.seededRandom() * scale.length);
+        } else {
+          // Alta tensão: notas mais altas ou dissonantes
+          degree = Math.floor(this.seededRandom() * scale.length) + 
+                  Math.floor(this.seededRandom() * 2) * scale.length;
         }
         
-        // Determina a oitava (variação baseada na posição no padrão)
-        const positionInPattern = i / patternLength;
-        const tensionAtPosition = this.getTensionAtPosition(positionInPattern);
-        
-        // Maior tensão = maior probabilidade de notas mais altas
-        const octaveVariation = this.seededRandom() > (1 - tensionAtPosition) ? 1 : 0;
-        
+        // Determina a oitava (variação baseada na tensão)
+        const octaveVariation = tension > 0.7 ? 1 : 0;
         const note = this.getNote(scale, root, degree, this.params.octave + octaveVariation);
+        
         pattern.push(note);
       } else {
         // Pausa
@@ -561,201 +544,164 @@ class SynthEngineAdvanced {
     
     return pattern;
   }
-  
-  // Gera um padrão de hook (gancho melódico) - curto e memorável
+
+  // Gera um padrão de gancho (hook) memorável
   generateHookPattern(scale: number[], root: number) {
-    const hookLength = 4; // Hooks curtos são mais memoráveis
     const pattern: (string | null)[] = [];
+    const hookLength = 4; // Hooks curtos são mais memoráveis
     
-    // Reseta a seed para consistência
-    this.resetRandomSeed();
+    // Usa notas fortes da escala para o hook (tônica, terça, quinta)
+    const strongDegrees = [0, 2, 4];
     
-    // Prefere notas fortes da escala para hooks
-    const strongDegrees = [0, 2, 4]; // Tônica, terça, quinta
-    
-    // Gera um padrão rítmico simples para o hook
+    // Gera um padrão simples e repetitivo
     for (let i = 0; i < hookLength; i++) {
-      if (i === 0 || i === hookLength - 1 || this.seededRandom() > 0.3) {
-        // Primeira e última nota são sempre presentes, outras têm 70% de chance
+      if (i === hookLength - 1 && this.seededRandom() > 0.7) {
+        // 30% de chance de terminar com uma pausa para criar expectativa
+        pattern.push(null);
+      } else {
+        // Seleciona graus fortes para o hook
         const degreeIndex = Math.floor(this.seededRandom() * strongDegrees.length);
         const degree = strongDegrees[degreeIndex];
-        const note = this.getNote(scale, root, degree, this.params.octave);
+        
+        // Alterna entre oitavas para criar interesse
+        const octaveVariation = i % 2 === 0 ? 0 : 1;
+        const note = this.getNote(scale, root, degree, this.params.octave + octaveVariation);
+        
         pattern.push(note);
-      } else {
-        pattern.push(null);
       }
     }
     
     return pattern;
   }
-  
-  // Obtém o valor de tensão para uma posição relativa no padrão
-  getTensionAtPosition(position: number): number {
-    // Mapeia a posição para o índice na curva de tensão
-    const index = Math.floor(position * this.tensionCurve.length);
-    return this.tensionCurve[Math.min(index, this.tensionCurve.length - 1)];
-  }
-  
+
   // Obtém uma nota específica da escala
-  getNote(scale: number[], root: number, degree: number, octave: number) {
-    // Normaliza o grau para o tamanho da escala
-    const normalizedDegree = ((degree % scale.length) + scale.length) % scale.length;
+  getNote(scale: number[], root: number, degree: number, octave: number): string {
+    // Ajusta o grau para ficar dentro da escala
+    const normalizedDegree = degree % scale.length;
+    
     // Calcula a nota MIDI
     const noteValue = (root + scale[normalizedDegree]) % 12;
+    
     // Ajusta a oitava se necessário
-    const adjustedOctave = octave + Math.floor((root + scale[normalizedDegree]) / 12);
-    // Retorna a nota no formato de string (ex: "C4")
-    return NOTE_NAMES[noteValue] + adjustedOctave;
+    const octaveAdjustment = Math.floor(degree / scale.length);
+    const finalOctave = octave + octaveAdjustment;
+    
+    // Retorna a nota como string (ex: "C4")
+    return NOTE_NAMES[noteValue] + finalOctave;
   }
-  
-  // Obtém uma nota de caminhada para o baixo
-  getWalkingBassNote(currentNote: string, nextNote: string) {
-    // Extrai o nome da nota e a oitava
-    const currentName = currentNote.slice(0, -1);
+
+  // Gera uma nota de caminhada para o baixo
+  getWalkingBassNote(currentNote: string, targetNote: string): string {
+    const currentNoteName = currentNote.slice(0, -1);
     const currentOctave = parseInt(currentNote.slice(-1));
-    const nextName = nextNote.slice(0, -1);
-    const nextOctave = parseInt(nextNote.slice(-1));
     
-    // Índices das notas
-    const currentIndex = NOTE_NAMES.indexOf(currentName);
-    const nextIndex = NOTE_NAMES.indexOf(nextName);
+    const targetNoteName = targetNote.slice(0, -1);
+    const targetOctave = parseInt(targetNote.slice(-1));
     
-    // Calcula a diferença (considerando oitavas)
-    const currentMidi = currentIndex + (currentOctave * 12);
-    const nextMidi = nextIndex + (nextOctave * 12);
+    const currentIndex = NOTE_NAMES.indexOf(currentNoteName);
+    const targetIndex = NOTE_NAMES.indexOf(targetNoteName);
     
-    // Escolhe uma nota intermediária
-    let walkingMidi;
-    if (currentMidi < nextMidi) {
-      walkingMidi = currentMidi + 1;
-    } else if (currentMidi > nextMidi) {
-      walkingMidi = currentMidi - 1;
+    // Calcula a direção da caminhada
+    let walkingIndex;
+    if (currentIndex < targetIndex || (currentIndex > targetIndex && targetOctave > currentOctave)) {
+      walkingIndex = (currentIndex + 1) % 12;
     } else {
-      // Se forem iguais, move cromáticamente
-      walkingMidi = currentMidi + (Math.random() > 0.5 ? 1 : -1);
+      walkingIndex = (currentIndex - 1 + 12) % 12;
     }
     
-    // Converte de volta para nome de nota
-    const walkingIndex = walkingMidi % 12;
-    const walkingOctave = Math.floor(walkingMidi / 12);
-    return NOTE_NAMES[walkingIndex] + walkingOctave;
+    return NOTE_NAMES[walkingIndex] + currentOctave;
   }
-  
-  // Avança o estágio de evolução da música
-  advanceEvolutionStage() {
-    this.evolutionStage = (this.evolutionStage + 1) % 4;
-    
-    // Atualiza a fase de evolução no display
-    const phases = ['Início', 'Desenvolvimento', 'Clímax', 'Resolução'];
-    this.displayInfo.evolutionPhase = phases[this.evolutionStage];
-    
-    // Regenera alguns padrões para criar variação
-    if (this.evolutionStage === 1 || this.evolutionStage === 2) {
-      // Mantém a progressão de acordes, mas varia a melodia
-      const scaleType = Object.keys(SCALES)[Math.floor(this.params.scale)];
-      const scale = SCALES[scaleType as keyof typeof SCALES] || SCALES.major;
-      const root = Math.floor(this.params.root);
-      
-      this.currentPattern = this.generateMelodicPattern(scale, root);
-    }
-  }
-  
-  // Toca um passo do sequenciador
+
+  // Executa um passo do sequenciador
   playStep(time: number) {
-    // Incrementa o contador de passos
+    if (!this.isPlaying || !this.currentPattern.length) return;
+    
+    // Avança o contador de passos
     this.step = (this.step + 1) % 16;
     
-    // Atualiza o contador de compassos a cada 16 passos
+    // Atualiza o contador de compassos
     if (this.step === 0) {
       this.bar = (this.bar + 1) % 4;
       
-      // Atualiza o contador de seções a cada 4 compassos
+      // Atualiza o contador de seções
       if (this.bar === 0) {
         this.section = (this.section + 1) % this.currentChordProgression.length;
+        this.phrase = (this.phrase + 1) % 8; // 8 frases = 1 arco completo
         
-        // Atualiza o contador de frases a cada ciclo completo da progressão
-        if (this.section === 0) {
-          this.phrase = (this.phrase + 1) % 4;
+        // Atualiza o estágio de evolução a cada 8 frases
+        if (this.phrase === 0) {
+          this.evolutionStage = (this.evolutionStage + 1) % 4;
           
-          // Avança o estágio de evolução a cada 4 frases
-          if (this.phrase === 0) {
-            this.advanceEvolutionStage();
+          // Atualiza a fase de evolução no display
+          const phases = ['Início', 'Desenvolvimento', 'Clímax', 'Resolução'];
+          this.displayInfo.evolutionPhase = phases[this.evolutionStage];
+          
+          // Regenera padrões para criar evolução
+          if (this.evolutionStage !== 0) { // Mantém o padrão inicial para consistência
+            this.generatePatterns();
           }
         }
         
         // Toca o acorde atual
         const chord = this.currentChordProgression[this.section];
+        this.chordSynth.triggerAttackRelease(chord, "2n", time);
         
-        // Duração baseada na tensão atual
-        const tensionAtCurrentBar = this.tensionCurve[(this.bar + this.section * 4) % this.tensionCurve.length];
-        const chordDuration = tensionAtCurrentBar > 0.5 ? "2n" : "1n";
-        
-        this.chordSynth.triggerAttackRelease(chord, chordDuration, time);
-        
-        // Toca a nota do baixo
+        // Toca a nota de baixo
         const bassNote = this.currentBassline[this.section][0];
         this.bassSynth.triggerAttackRelease(bassNote, "4n", time);
         
         // Toca pad em momentos específicos da evolução
-        if (this.evolutionStage === 2 && this.section === 0) { // Durante o clímax
-          const padChord = chord.slice(0, 3); // Usa apenas tríade para o pad
-          this.padSynth.triggerAttackRelease(padChord, "2m", time);
+        if (this.evolutionStage === 2) { // Durante o clímax
+          this.padSynth.triggerAttackRelease(chord, "1m", time);
         }
-      } else if (this.params.bassIntensity > 0.3 && this.currentBassline[this.section].length > 1) {
-        // Toca notas adicionais do baixo em outros compassos
-        const bassIndex = Math.min(this.bar, this.currentBassline[this.section].length - 1);
-        const bassNote = this.currentBassline[this.section][bassIndex];
-        
-        // Duração baseada na intensidade do baixo
-        const bassDuration = this.params.bassIntensity > 0.7 ? "8n" : "4n";
-        this.bassSynth.triggerAttackRelease(bassNote, bassDuration, time);
+      }
+      
+      // Toca notas de baixo adicionais
+      if (this.bar === 2 && this.currentBassline[this.section].length > 1) {
+        const bassNote = this.currentBassline[this.section][1];
+        this.bassSynth.triggerAttackRelease(bassNote, "4n", time);
+      }
+      
+      if (this.bar === 3 && this.currentBassline[this.section].length > 2) {
+        const bassNote = this.currentBassline[this.section][2];
+        this.bassSynth.triggerAttackRelease(bassNote, "4n", time);
       }
     }
     
-    // Toca a melodia
-    if (this.currentPattern.length > 0) {
-      // Decide se toca o padrão principal ou o hook
-      let patternToUse: (string | null)[];
-      
-      // Durante o clímax ou em momentos específicos, usa o hook para reforçar a memorabilidade
-      if ((this.evolutionStage === 2 && this.bar === 0) || 
-          (this.section === 0 && this.step < 8 && this.seededRandom() > 0.7)) {
-        patternToUse = this.hookPattern;
-      } else {
-        patternToUse = this.currentPattern;
-      }
-      
-      // Índice da nota atual, considerando swing
-      let noteIndex = this.step % patternToUse.length;
-      
-      // Aplica swing (atrasa notas em tempos pares)
-      const swingOffset = (noteIndex % 2 === 1) ? this.params.swingFeel * 0.1 : 0;
-      
-      // Toca a nota da melodia, se houver
-      const note = patternToUse[noteIndex];
-      if (note !== null) {
-        // Duração baseada na complexidade rítmica e estágio de evolução
-        let duration: string;
-        
-        if (this.evolutionStage === 2) { // Clímax - notas mais curtas e intensas
-          duration = this.params.rhythmComplexity < 0.5 ? "16n" : "32n";
-        } else if (this.evolutionStage === 3) { // Resolução - notas mais longas
-          duration = this.params.rhythmComplexity < 0.5 ? "8n" : "16n";
-        } else { // Outros estágios
-          duration = this.params.rhythmComplexity < 0.5 ? "16n" : "8n";
-        }
-        
-        // Volume baseado na tensão atual
-        const tensionAtCurrentStep = this.tensionCurve[(this.step + this.section * 16) % this.tensionCurve.length];
-        const velocity = 0.5 + tensionAtCurrentStep * 0.5;
-        
-        this.melodySynth.triggerAttackRelease(note, duration, time + swingOffset, velocity);
-      }
+    // Seleciona o padrão melódico baseado no estágio de evolução
+    let currentMelodicPattern;
+    
+    // Alterna entre padrão principal e hook baseado na evolução
+    if (this.evolutionStage === 0 || this.evolutionStage === 2) {
+      // Início e Clímax: usa o padrão principal
+      currentMelodicPattern = this.currentPattern;
+    } else if (this.evolutionStage === 1) {
+      // Desenvolvimento: alterna entre padrão principal e hook
+      currentMelodicPattern = this.bar % 2 === 0 ? this.currentPattern : this.hookPattern;
+    } else {
+      // Resolução: usa principalmente o hook
+      currentMelodicPattern = this.bar % 3 === 0 ? this.currentPattern : this.hookPattern;
     }
     
-    // Regenera padrões ocasionalmente para variação
-    if (this.step === 0 && this.bar === 0 && this.section === 0 && Math.random() < 0.3) {
-      this.generatePatterns();
+    // Toca a nota da melodia
+    const patternIndex = this.step % currentMelodicPattern.length;
+    const note = currentMelodicPattern[patternIndex];
+    
+    if (note) {
+      // Aplica swing se necessário
+      let swingTime = time;
+      if (this.step % 2 === 1) { // Notas em tempos fracos
+        swingTime += (this.params.swingFeel * 0.1);
+      }
+      
+      // Ajusta a velocidade baseada na curva de tensão
+      const tensionIndex = (this.section * 4 + this.bar) % this.tensionCurve.length;
+      const velocity = 0.5 + (this.tensionCurve[tensionIndex] * 0.5);
+      
+      // Duração da nota baseada na complexidade rítmica
+      const duration = this.params.rhythmComplexity < 0.5 ? "16n" : "32n";
+      
+      this.melodySynth.triggerAttackRelease(note, duration, swingTime, velocity);
     }
   }
 }
